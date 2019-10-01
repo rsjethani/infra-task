@@ -1,0 +1,38 @@
+version: "3.2"
+services:
+  wireguard:
+    build: ./wireguard
+    image: wireguard:alpine
+
+  server:
+    build: ./server
+    image: server:alpine
+    container_name: server
+    cap_add:
+      - NET_ADMIN
+    environment:
+      WG_IFACE_CIDR: 10.0.0.5/24
+    volumes:
+      - type: bind
+        source: ./server/wg0.conf
+        target: /etc/wireguard/wg0.conf
+    depends_on:
+      - wireguard
+
+  client:
+    build: ./client
+    image: client1:alpine
+    container_name: client1
+    cap_add:
+      - NET_ADMIN
+    environment:
+      WG_IFACE_CIDR: 10.0.0.11/24
+      SERVER_APP_ADDR: 10.0.0.5:3333
+    volumes:
+      - type: bind
+        source: ./client/wg0.conf
+        target: /etc/wireguard/wg0.conf
+    depends_on:
+      - wireguard
+      - server
+
