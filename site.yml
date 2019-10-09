@@ -1,0 +1,70 @@
+---
+- hosts: all
+  tasks:
+    - name: Include Docker role
+      include_role:
+        name: ansible-role-docker
+      vars:
+        docker_install_compose: yes
+
+    - name: Install wireguard PPA
+      apt_repository:
+        repo: "ppa:wireguard/wireguard"
+        state: present
+        update_cache: yes
+      become: yes
+
+    - name: Install wireguard
+      apt:
+        name: wireguard
+        state: present
+      become: yes
+
+    - name: Generate Server Private key
+      command: wg genkey
+      register: s_privkey
+
+    - name: Generate Server Public key
+      shell: echo {{s_privkey.stdout}} | wg pubkey
+      register: s_pubkey
+
+    - name: Generate Client Private key
+      command: wg genkey
+      register: c_privkey
+
+    - name: Generate Client Public key
+      shell: echo {{c_privkey.stdout}} | wg pubkey
+      register: c_pubkey
+
+    - name: copy task directory
+      copy:
+        src: ./infra-task
+        dest: "{{ansible_env.HOME}}"
+        mode: preserve
+
+    - name: copy server wg0.conf
+      template:
+        src: server-wg0.conf.j2
+        dest: "{{ansible_env.HOME}}/infra-task/server/wg0.conf"
+      vars:
+        server_priv_key: "{{s_privkey.stdout}}"
+        client_pub_key: "{{c_pubkey.stdout}}"
+        client_wg_cidr: 10.0.0.11/32
+
+    - name: copy client wg0.conf
+      template:
+        src: client-wg0.conf.j2
+        dest: "{{ansible_env.HOME}}/infra-task/client/wg0.conf"
+      vars:
+        server_pub_key: "{{s_pubkey.stdout}}"
+        client_priv_key: "{{c_privkey.stdout}}"
+
+    - name: copy docker-compose file
+      template:
+        src: docker-compose.yml.j2
+        dest: "{{ansible_env.HOME}}/infra-task/docker-compose.yml"
+      vars:
+        server_wg_cidr: 10.0.0.5/24
+        client_wg_cidr: 10.0.0.11/24
+        server_app_addr: 10.0.0.5
+
